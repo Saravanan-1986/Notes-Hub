@@ -6,6 +6,7 @@ const noteSchema = new mongoose.Schema({
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   visibility: { type: String, enum: ['public', 'private'], default: 'private' },
   githubPath: { type: String, required: true },
+  repoName: { type: String, required: true },
   fileSize: { type: Number },
   uploadedAt: { type: Date, default: Date.now }
 });

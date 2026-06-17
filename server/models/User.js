@@ -4,9 +4,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  githubUsername: { type: String, required: true },
-  githubToken: { type: String, required: true },
-  githubRepo: { type: String, default: null },
+  repos: [{ type: String }], // e.g. ["userid-notes-1", "userid-notes-2"]
   createdAt: { type: Date, default: Date.now }
 });
 

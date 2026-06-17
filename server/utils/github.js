@@ -1,32 +1,77 @@
 const axios = require('axios');
 
+const CENTRAL_USERNAME = process.env.GITHUB_USERNAME;
+const CENTRAL_TOKEN = process.env.GITHUB_TOKEN;
+
+if (!CENTRAL_USERNAME || !CENTRAL_TOKEN) {
+  console.error('GITHUB_USERNAME and GITHUB_TOKEN must be set in .env');
+  process.exit(1);
+}
+
+const BASE_URL = 'https://api.github.com';
+const HEADERS = {
+  Authorization: `token ${CENTRAL_TOKEN}`,
+  Accept: 'application/vnd.github.v3+json',
+  'User-Agent': 'Notes-Hub'
+};
+
 class GitHubService {
-  constructor(token, username) {
-    this.token = token;
-    this.username = username;
-    this.baseURL = 'https://api.github.com';
-    this.headers = {
-      Authorization: `token ${token}`,
-      Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'Notes-Hub'
-    };
+  /**
+   * Get or create a repo for a user.
+   * Returns the repo name with available space.
+   * Format: notes-hub-{userId}-{index}
+   */
+  static async getOrCreateRepo(userId) {
+    const baseName = `notes-hub-${userId}`;
+    let index = 1;
+
+    // Try existing repos first
+    while (true) {
+      const repoName = index === 1 ? baseName : `${baseName}-${index}`;
+      
+      try {
+        // Check if repo exists and its size
+        const { data: repoData } = await axios.get(
+          `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}`,
+          { headers: HEADERS }
+        );
+
+        // GitHub repos have a 1GB soft limit for free accounts
+        // We'll use a 500MB safety margin
+        const sizeMB = (repoData.size / 1024).toFixed(2); // size is in KB
+        console.log(`Repo ${repoName}: ${sizeMB}MB used`);
+
+        if (repoData.size < 500 * 1024) { // less than 500MB
+          return repoName;
+        }
+        // Repo is full, try next
+        index++;
+      } catch (err) {
+        if (err.response?.status === 404) {
+          // Repo doesn't exist - create it
+          return await GitHubService._createRepo(repoName);
+        }
+        throw err;
+      }
+    }
   }
 
-  // Create repo if not exists (lazy creation)
-  async createRepo() {
-    const repoName = `${this.username}-notes`;
+  /**
+   * Create a new repo
+   */
+  static async _createRepo(repoName) {
     try {
       await axios.post(
-        `${this.baseURL}/user/repos`,
+        `${BASE_URL}/user/repos`,
         {
           name: repoName,
           private: false,
-          auto_init: true,
+          auto_init: false,
           description: 'Notes Hub - Encrypted study materials'
         },
-        { headers: this.headers }
+        { headers: HEADERS }
       );
-      console.log(`Repo ${repoName} created`);
+      console.log(`Repo ${repoName} created successfully`);
       return repoName;
     } catch (err) {
       if (err.response?.status === 422) {
@@ -37,51 +82,91 @@ class GitHubService {
     }
   }
 
-  // Upload encrypted file to GitHub
-  async uploadFile(path, contentBase64, message = 'Upload note') {
-    const repoName = `${this.username}-notes`;
+  /**
+   * Initialize a repo with a .gitkeep (since auto_init is false)
+   */
+  static async initRepo(repoName) {
+    try {
+      // Create an initial commit to initialize the repo
+      const { data: refData } = await axios.post(
+        `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/git/refs`,
+        {
+          ref: 'refs/heads/main',
+          sha: '0000000000000000000000000000000000000000'
+        },
+        { headers: HEADERS }
+      );
+    } catch (err) {
+      // Repo likely already has commits, that's fine
+    }
+  }
+
+  /**
+   * Upload encrypted file to a user's repo
+   */
+  static async uploadFile(userId, path, contentBase64, message = 'Upload note') {
+    const repoName = await GitHubService.getOrCreateRepo(userId);
     
     try {
       const response = await axios.put(
-        `${this.baseURL}/repos/${this.username}/${repoName}/contents/${path}`,
-        {
-          message,
-          content: contentBase64
-        },
-        { headers: this.headers }
+        `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
+        { message, content: contentBase64 },
+        { headers: HEADERS }
       );
-      return response.data;
+      return { repoName, data: response.data };
     } catch (err) {
       if (err.response?.status === 422) {
-        throw new Error('File already exists. Use update instead.');
+        throw new Error('File already exists. Cannot overwrite.');
       }
       throw err;
     }
   }
 
-  // Get file content from GitHub
-  async getFile(path) {
-    const repoName = `${this.username}-notes`;
-    
+  /**
+   * Get file content from a specific repo
+   */
+  static async getFile(repoName, path) {
     const response = await axios.get(
-      `${this.baseURL}/repos/${this.username}/${repoName}/contents/${path}`,
-      { headers: this.headers }
+      `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
+      { headers: HEADERS }
     );
-    
     return response.data.content; // Base64 encoded
   }
 
-  // Delete file from GitHub
-  async deleteFile(path, sha, message = 'Delete note') {
-    const repoName = `${this.username}-notes`;
-    
+  /**
+   * Get SHA of a file (needed for delete/update)
+   */
+  static async getFileSha(repoName, path) {
+    const response = await axios.get(
+      `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
+      { headers: HEADERS }
+    );
+    return response.data.sha;
+  }
+
+  /**
+   * Delete a file from GitHub
+   */
+  static async deleteFile(repoName, path, sha, message = 'Delete note') {
     await axios.delete(
-      `${this.baseURL}/repos/${this.username}/${repoName}/contents/${path}`,
+      `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
       {
-        headers: this.headers,
+        headers: HEADERS,
         data: { message, sha }
       }
     );
+  }
+
+  /**
+   * Upload file to a specific repo (used when repo is already known)
+   */
+  static async uploadFileToRepo(repoName, path, contentBase64, message = 'Upload note') {
+    const response = await axios.put(
+      `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
+      { message, content: contentBase64 },
+      { headers: HEADERS }
+    );
+    return response.data;
   }
 }
 

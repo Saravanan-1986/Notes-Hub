@@ -6,7 +6,7 @@ const GitHubService = require('../utils/github');
 // Signup
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password, githubUsername, githubToken } = req.body;
+    const { name, email, password } = req.body;
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -14,33 +14,30 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    // Validate GitHub token by creating the notes repo
-    const github = new GitHubService(githubToken, githubUsername);
-    let repoName;
-    try {
-      repoName = await github.createRepo();
-    } catch (ghErr) {
-      return res.status(400).json({ 
-        error: 'Invalid GitHub token or username. Please check your credentials.',
-        details: ghErr.message 
-      });
-    }
-
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Create user in DB first
     const user = new User({
       name,
       email,
-      password: hashedPassword,
-      githubUsername,
-      githubToken,
-      githubRepo: repoName
+      password: hashedPassword
     });
 
     await user.save();
+
+    // Auto-create a GitHub repo for this user
+    let repoName;
+    try {
+      repoName = await GitHubService.getOrCreateRepo(user._id.toString());
+      user.repos.push(repoName);
+      await user.save();
+    } catch (ghErr) {
+      console.error('GitHub repo creation warning:', ghErr.message);
+      // Continue even if repo creation fails - user can still use the platform
+      // Repo will be created on first upload
+    }
 
     // Generate JWT
     const token = jwt.sign(
@@ -55,9 +52,7 @@ exports.signup = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email,
-        githubUsername: user.githubUsername,
-        githubRepo: repoName
+        email: user.email
       }
     });
   } catch (err) {
@@ -95,8 +90,7 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email,
-        githubUsername: user.githubUsername
+        email: user.email
       }
     });
   } catch (err) {

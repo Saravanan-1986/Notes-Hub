@@ -1,6 +1,5 @@
 const Folder = require('../models/Folder');
 const Note = require('../models/Note');
-const User = require('../models/User');
 const GitHubService = require('../utils/github');
 
 // Create Folder
@@ -49,7 +48,6 @@ exports.deleteFolder = async (req, res) => {
       return res.status(404).json({ error: 'Folder not found' });
     }
 
-    // Check ownership
     if (folder.owner.toString() !== req.user.id) {
       return res.status(403).json({ error: 'Not authorized to delete this folder' });
     }
@@ -57,27 +55,12 @@ exports.deleteFolder = async (req, res) => {
     // Get all notes in this folder
     const notes = await Note.find({ folderId: id });
 
-    // Get user for GitHub operations
-    const user = await User.findById(req.user.id);
-    const github = new GitHubService(user.githubToken, user.githubUsername);
-
     // Delete each note from GitHub
     for (const note of notes) {
       try {
-        const repoName = `${user.githubUsername}-notes`;
-        const axios = require('axios');
-        const headers = {
-          Authorization: `token ${user.githubToken}`,
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'Notes-Hub'
-        };
-        const { data: fileData } = await axios.get(
-          `https://api.github.com/repos/${user.githubUsername}/${repoName}/contents/${note.githubPath}`,
-          { headers }
-        );
-        await github.deleteFile(note.githubPath, fileData.sha);
+        const sha = await GitHubService.getFileSha(note.repoName, note.githubPath);
+        await GitHubService.deleteFile(note.repoName, note.githubPath, sha);
       } catch (ghErr) {
-        // Skip if file already doesn't exist on GitHub
         if (ghErr.response?.status !== 404) {
           console.error(`GitHub delete error for ${note.filename}:`, ghErr.message);
         }

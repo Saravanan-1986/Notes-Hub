@@ -9,26 +9,17 @@ exports.uploadNote = async (req, res) => {
   try {
     const { folderId, visibility } = req.body;
     
-    // Check file exists
     if (!req.file) {
       return res.status(400).json({ error: 'No PDF file uploaded' });
     }
 
-    // Get folder
     const folder = await Folder.findById(folderId);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
 
-    // Check ownership
     if (folder.owner.toString() !== req.user.id) {
       return res.status(403).json({ error: 'Not authorized for this folder' });
-    }
-
-    // Get user for GitHub token
-    const user = await User.findById(req.user.id);
-    if (!user.githubToken) {
-      return res.status(400).json({ error: 'GitHub token not configured' });
     }
 
     // Encrypt PDF buffer
@@ -37,18 +28,17 @@ exports.uploadNote = async (req, res) => {
     // GitHub path: folderName/filename.pdf.enc
     const githubPath = `${folder.name}/${req.file.originalname}.enc`;
 
-    // Upload to GitHub
-    const github = new GitHubService(user.githubToken, user.githubUsername);
-    await github.createRepo();
-    await github.uploadFile(githubPath, encryptedBase64);
+    // Upload to GitHub using central credentials - auto-creates repo with overflow
+    const result = await GitHubService.uploadFile(req.user.id, githubPath, encryptedBase64);
 
-    // Save metadata to MongoDB
+    // Save metadata to MongoDB including the repo where it was stored
     const note = new Note({
       filename: req.file.originalname,
       folderId,
       owner: req.user.id,
       visibility: visibility || 'private',
       githubPath,
+      repoName: result.repoName,
       fileSize: req.file.size
     });
 
@@ -62,7 +52,6 @@ exports.uploadNote = async (req, res) => {
         folder: folder.name,
         folderId: folder._id,
         visibility: note.visibility,
-        githubPath: note.githubPath,
         fileSize: note.fileSize,
         uploadedAt: note.uploadedAt
       }
@@ -84,7 +73,6 @@ exports.getNotesByFolder = async (req, res) => {
       return res.status(404).json({ error: 'Folder not found' });
     }
 
-    // Check access
     if (folder.owner.toString() !== req.user.id && folder.visibility === 'private') {
       return res.status(403).json({ error: 'Not authorized' });
     }
@@ -120,17 +108,10 @@ exports.viewNote = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to view this note' });
     }
 
-    // Fetch from GitHub and decrypt
-    const user = await User.findById(note.owner);
-    if (!user || !user.githubToken) {
-      return res.status(500).json({ error: 'Owner GitHub token unavailable' });
-    }
-
-    const github = new GitHubService(user.githubToken, user.githubUsername);
-    const encryptedBase64 = await github.getFile(note.githubPath);
+    // Fetch from GitHub using the stored repo name
+    const encryptedBase64 = await GitHubService.getFile(note.repoName, note.githubPath);
     const pdfBuffer = decrypt(encryptedBase64);
 
-    // Send the decrypted PDF
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="${note.filename}"`,
@@ -149,10 +130,9 @@ exports.searchPublicNotes = async (req, res) => {
     const { q } = req.query;
 
     if (!q) {
-      // If no query, return all public notes
       const notes = await Note.find({ visibility: 'public' })
         .populate('folderId', 'name')
-        .populate('owner', 'name githubUsername')
+        .populate('owner', 'name email')
         .sort({ uploadedAt: -1 });
 
       return res.json({
@@ -162,17 +142,14 @@ exports.searchPublicNotes = async (req, res) => {
       });
     }
 
-    // Search by filename or folder name (case-insensitive)
     const regex = new RegExp(q, 'i');
     
-    // First find matching folders
     const matchingFolders = await Folder.find({ 
       name: regex, 
       visibility: 'public' 
     }).select('_id');
     const folderIds = matchingFolders.map(f => f._id);
 
-    // Find notes that are public AND (match filename OR belong to matching folders)
     const notes = await Note.find({
       visibility: 'public',
       $or: [
@@ -181,7 +158,7 @@ exports.searchPublicNotes = async (req, res) => {
       ]
     })
       .populate('folderId', 'name')
-      .populate('owner', 'name githubUsername')
+      .populate('owner', 'name email')
       .sort({ uploadedAt: -1 });
 
     res.json({
@@ -204,39 +181,20 @@ exports.deleteNote = async (req, res) => {
       return res.status(404).json({ error: 'Note not found' });
     }
 
-    // Check ownership
     if (note.owner.toString() !== req.user.id) {
       return res.status(403).json({ error: 'Not authorized to delete this note' });
     }
 
-    // Get user and delete from GitHub
-    const user = await User.findById(req.user.id);
-    const github = new GitHubService(user.githubToken, user.githubUsername);
-
+    // Delete from GitHub using stored repo name
     try {
-      // Get the file SHA from GitHub content API
-      const repoName = `${user.githubUsername}-notes`;
-      const axios = require('axios');
-      const headers = {
-        Authorization: `token ${user.githubToken}`,
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'Notes-Hub'
-      };
-      const { data: fileData } = await axios.get(
-        `https://api.github.com/repos/${user.githubUsername}/${repoName}/contents/${note.githubPath}`,
-        { headers }
-      );
-      
-      // Delete using SHA
-      await github.deleteFile(note.githubPath, fileData.sha);
+      const sha = await GitHubService.getFileSha(note.repoName, note.githubPath);
+      await GitHubService.deleteFile(note.repoName, note.githubPath, sha);
     } catch (ghErr) {
-      // If file doesn't exist on GitHub (404), just delete from DB
       if (ghErr.response?.status !== 404) {
         console.error('GitHub delete error:', ghErr.message);
       }
     }
 
-    // Delete from MongoDB
     await Note.findByIdAndDelete(id);
 
     res.json({
@@ -256,13 +214,12 @@ exports.getNoteMetadata = async (req, res) => {
 
     const note = await Note.findById(id)
       .populate('folderId', 'name')
-      .populate('owner', 'name githubUsername');
+      .populate('owner', 'name email');
     
     if (!note) {
       return res.status(404).json({ error: 'Note not found' });
     }
 
-    // Check access
     const isOwner = note.owner._id.toString() === req.user.id;
     const isPublic = note.visibility === 'public';
 

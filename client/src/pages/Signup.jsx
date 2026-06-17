@@ -6,9 +6,7 @@ export default function Signup() {
   const [form, setForm] = useState({
     name: '',
     email: '',
-    password: '',
-    githubUsername: '',
-    githubToken: ''
+    password: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,7 +21,7 @@ export default function Signup() {
       await signup(form);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.details || 'Signup failed');
+      setError(err.response?.data?.error || 'Signup failed');
     } finally {
       setLoading(false);
     }
@@ -31,8 +29,9 @@ export default function Signup() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="glass-card auth-card">
         <div className="auth-header">
+          <div className="auth-logo">📚</div>
           <h1>Create Account</h1>
           <p>Join Notes Hub and start sharing your study materials</p>
         </div>
@@ -68,30 +67,6 @@ export default function Signup() {
               minLength={6}
               placeholder="At least 6 characters"
             />
-          </div>
-          <div className="form-group">
-            <label>GitHub Username</label>
-            <input
-              type="text"
-              value={form.githubUsername}
-              onChange={(e) => setForm({ ...form, githubUsername: e.target.value })}
-              required
-              placeholder="your-github-username"
-            />
-          </div>
-          <div className="form-group">
-            <label>GitHub Personal Access Token</label>
-            <input
-              type="password"
-              value={form.githubToken}
-              onChange={(e) => setForm({ ...form, githubToken: e.target.value })}
-              required
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-            />
-            <small className="form-hint">
-              Needs <code>repo</code> scope. 
-              <a href="https://github.com/settings/tokens" target="_blank" rel="noreferrer"> Generate token</a>
-            </small>
           </div>
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
             {loading ? 'Creating Account...' : 'Create Account'}
