@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import FolderPage from './pages/FolderPage';
 import NoteViewer from './pages/NoteViewer';
 import SearchPage from './pages/SearchPage';
+import PublicFolderPage from './pages/PublicFolderPage';
 import './App.css';
 
 function App() {
@@ -46,6 +47,7 @@ function App() {
                 }
               />
               <Route path="/search" element={<SearchPage />} />
+              <Route path="/public-folder/:id" element={<PublicFolderPage />} />
             </Routes>
           </main>
         </div>
