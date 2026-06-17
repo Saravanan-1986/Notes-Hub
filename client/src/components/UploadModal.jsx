@@ -42,37 +42,43 @@ export default function UploadModal({ folderId, onClose, onUpload }) {
           {error && <div className="alert alert-error">{error}</div>}
           <div className="form-group">
             <label>Select PDF File</label>
-            <div className="file-input-wrapper">
+            <div className="file-drop-zone">
               <input
                 type="file"
                 accept=".pdf,application/pdf"
                 onChange={(e) => setFile(e.target.files[0])}
                 required
-                className="file-input"
               />
-              <div className="file-input-label">
-                {file ? file.name : 'Click to select a PDF'}
-              </div>
+              <span className="drop-icon">📄</span>
+              <p className="drop-text">
+                {file ? file.name : <><strong>Click to browse</strong> or drag PDF here</>}
+              </p>
             </div>
             {file && (
-              <small className="form-hint">
-                {(file.size / 1024 / 1024).toFixed(1)} MB
-              </small>
+              <div className="file-selected">
+                <span className="file-name">{file.name}</span>
+                <span className="file-size">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
+              </div>
             )}
           </div>
           <div className="form-group">
             <label>Visibility</label>
             <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
-              <option value="private">Private (only you)</option>
-              <option value="public">Public (searchable by everyone)</option>
+              <option value="private">Private — only you can see this</option>
+              <option value="public">Public — anyone can search & view</option>
             </select>
           </div>
+          <div className="section-divider" />
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={uploading}>
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={uploading || !file}>
-              {uploading ? 'Encrypting & Uploading...' : 'Upload & Encrypt'}
+              {uploading ? (
+                <>Encrypting & Uploading...</>
+              ) : (
+                <>⬆ Upload & Encrypt</>
+              )}
             </button>
           </div>
         </form>
