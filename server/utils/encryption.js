@@ -1,6 +1,14 @@
 const crypto = require('crypto');
 
-const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY, 'hex');
+const ENCRYPTION_KEY_HEX = process.env.ENCRYPTION_KEY;
+
+if (!ENCRYPTION_KEY_HEX || ENCRYPTION_KEY_HEX.length !== 64) {
+  console.error('ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes) for AES-256.');
+  console.error('Generate one using: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  process.exit(1);
+}
+
+const ENCRYPTION_KEY = Buffer.from(ENCRYPTION_KEY_HEX, 'hex');
 
 function encrypt(buffer) {
   const iv = crypto.randomBytes(12);
