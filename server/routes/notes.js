@@ -11,17 +11,10 @@ const {
   getNoteMetadata 
 } = require('../controllers/noteController');
 
-// Multer config - store in memory (we encrypt before saving)
+// Multer config - accept all file types
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Only PDF files allowed'), false);
-    }
-  }
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max to support larger files
 });
 
 // Public routes (no auth required) - MUST be before param routes

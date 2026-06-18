@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import PDFViewer from '../components/PDFViewer';
 
 export default function NoteViewer() {
   const { id } = useParams();
@@ -14,9 +15,12 @@ export default function NoteViewer() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchNote = async () => {
       try {
         const { data } = await API.get(`/notes/${id}/metadata`);
+        if (cancelled) return;
         setNote(data.note);
 
         const token = localStorage.getItem('token');
@@ -28,16 +32,21 @@ export default function NoteViewer() {
 
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
+        if (cancelled) return;
         setPdfUrl(url);
       } catch (err) {
-        setError(err.message || 'Failed to load document');
+        if (!cancelled) setError(err.message || 'Failed to load document');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchNote();
-    return () => { if (pdfUrl) URL.revokeObjectURL(pdfUrl); };
+
+    return () => {
+      cancelled = true;
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    };
   }, [id]);
 
   const handleDelete = async () => {
@@ -84,11 +93,6 @@ export default function NoteViewer() {
           </div>
         </div>
         <div className="viewer-info-right">
-          {pdfUrl && (
-            <a href={pdfUrl} download={note.filename} className="btn btn-accent">
-              ⬇ Download
-            </a>
-          )}
           {isOwner && (
             <button onClick={handleDelete} className="btn btn-danger" disabled={deleting}>
               {deleting ? 'Deleting...' : '🗑 Delete'}
@@ -99,7 +103,7 @@ export default function NoteViewer() {
 
       <div className="pdf-viewer">
         {pdfUrl ? (
-          <iframe src={pdfUrl} title={note.filename} className="pdf-iframe" />
+          <PDFViewer pdfUrl={pdfUrl} filename={note.filename} />
         ) : (
           <div className="loading">Preparing document...</div>
         )}

@@ -16,6 +16,7 @@ connectDB();
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/notes', require('./routes/notes'));
+app.use('/api/groups', require('./routes/groups'));
 
 // Test Route
 app.get('/', (req, res) => {

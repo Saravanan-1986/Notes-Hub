@@ -9,6 +9,8 @@ import FolderPage from './pages/FolderPage';
 import NoteViewer from './pages/NoteViewer';
 import SearchPage from './pages/SearchPage';
 import PublicFolderPage from './pages/PublicFolderPage';
+import GroupsPage from './pages/GroupsPage';
+import GroupDetailPage from './pages/GroupDetailPage';
 import './App.css';
 
 function App() {
@@ -48,6 +50,22 @@ function App() {
               />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/public-folder/:id" element={<PublicFolderPage />} />
+              <Route
+                path="/groups"
+                element={
+                  <ProtectedRoute>
+                    <GroupsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/group/:groupId"
+                element={
+                  <ProtectedRoute>
+                    <GroupDetailPage />
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
           </main>
         </div>

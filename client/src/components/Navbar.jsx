@@ -28,6 +28,10 @@ export default function Navbar() {
                 <span className="nav-icon">📁</span>
                 <span>Folders</span>
               </Link>
+              <Link to="/groups" className="nav-link">
+                <span className="nav-icon">👥</span>
+                <span>Groups</span>
+              </Link>
               <div className="nav-user">
                 <div className="nav-user-avatar">
                   {user.name ? user.name.charAt(0) : '?'}

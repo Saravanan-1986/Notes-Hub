@@ -67,7 +67,7 @@ class GitHubService {
           name: repoName,
           private: false,
           auto_init: false,
-          description: 'Notes Hub - Encrypted study materials'
+          description: 'Notes Hub - Study materials'
         },
         { headers: HEADERS }
       );
@@ -124,13 +124,15 @@ class GitHubService {
 
   /**
    * Get file content from a specific repo
+   * GitHub returns base64 with newlines - we strip them for clean decoding
    */
   static async getFile(repoName, path) {
     const response = await axios.get(
       `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
       { headers: HEADERS }
     );
-    return response.data.content; // Base64 encoded
+    // Strip all whitespace from base64 - GitHub sometimes adds newlines
+    return response.data.content.replace(/\s/g, '');
   }
 
   /**

@@ -1,16 +1,57 @@
 const Note = require('../models/Note');
 const Folder = require('../models/Folder');
 const User = require('../models/User');
-const { encrypt, decrypt } = require('../utils/encryption');
 const GitHubService = require('../utils/github');
+const path = require('path');
 
-// Upload PDF
+// Helper: Get MIME type from file extension
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes = {
+    '.pdf': 'application/pdf',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.doc': 'application/msword',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.xls': 'application/vnd.ms-excel',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.bmp': 'image/bmp',
+    '.svg': 'image/svg+xml',
+    '.webp': 'image/webp',
+    '.mp4': 'video/mp4',
+    '.mp3': 'audio/mpeg',
+    '.zip': 'application/zip',
+    '.rar': 'application/vnd.rar',
+    '.7z': 'application/x-7z-compressed',
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.xml': 'application/xml',
+    '.md': 'text/markdown',
+    '.py': 'text/x-python',
+    '.jsx': 'text/javascript',
+    '.ts': 'application/typescript',
+    '.tsx': 'text/typescript',
+    '.epub': 'application/epub+zip',
+    '.mobi': 'application/x-mobipocket-ebook',
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
+// Upload file (any type)
 exports.uploadNote = async (req, res) => {
   try {
     const { folderId, visibility } = req.body;
     
     if (!req.file) {
-      return res.status(400).json({ error: 'No PDF file uploaded' });
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const folder = await Folder.findById(folderId);
@@ -22,18 +63,20 @@ exports.uploadNote = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized for this folder' });
     }
 
-    // Encrypt PDF buffer
-    const encryptedBase64 = encrypt(req.file.buffer);
+    const originalName = req.file.originalname;
+    
+    // Store file directly without encryption - base64 encode it
+    const contentBase64 = req.file.buffer.toString('base64');
 
-    // GitHub path: folderName/filename.pdf.enc
-    const githubPath = `${folder.name}/${req.file.originalname}.enc`;
+    // GitHub path: folderName/filename
+    const githubPath = `${folder.name}/${originalName}`;
 
     // Upload to GitHub using central credentials - auto-creates repo with overflow
-    const result = await GitHubService.uploadFile(req.user.id, githubPath, encryptedBase64);
+    const result = await GitHubService.uploadFile(req.user.id, githubPath, contentBase64);
 
     // Save metadata to MongoDB including the repo where it was stored
     const note = new Note({
-      filename: req.file.originalname,
+      filename: originalName,
       folderId,
       owner: req.user.id,
       visibility: visibility || 'private',
@@ -89,7 +132,7 @@ exports.getNotesByFolder = async (req, res) => {
   }
 };
 
-// View a single note - decrypt and return PDF
+// View a single note - return raw file content with proper MIME type
 exports.viewNote = async (req, res) => {
   try {
     const { id } = req.params;
@@ -109,15 +152,20 @@ exports.viewNote = async (req, res) => {
     }
 
     // Fetch from GitHub using the stored repo name
-    const encryptedBase64 = await GitHubService.getFile(note.repoName, note.githubPath);
-    const pdfBuffer = decrypt(encryptedBase64);
+    const fileContent = await GitHubService.getFile(note.repoName, note.githubPath);
+    
+    // Just decode base64 (no decryption needed)
+    const fileBuffer = Buffer.from(fileContent, 'base64');
+
+    // Determine MIME type from filename
+    const contentType = getMimeType(note.filename);
 
     res.set({
-      'Content-Type': 'application/pdf',
+      'Content-Type': contentType,
       'Content-Disposition': `inline; filename="${note.filename}"`,
-      'Content-Length': pdfBuffer.length
+      'Content-Length': fileBuffer.length
     });
-    res.send(pdfBuffer);
+    res.send(fileBuffer);
   } catch (err) {
     console.error('View note error:', err.message);
     res.status(500).json({ error: err.message });
@@ -207,7 +255,7 @@ exports.deleteNote = async (req, res) => {
   }
 };
 
-// Get note metadata (without PDF content)
+// Get note metadata (without file content)
 exports.getNoteMetadata = async (req, res) => {
   try {
     const { id } = req.params;
@@ -241,6 +289,7 @@ exports.getNoteMetadata = async (req, res) => {
       }
     });
   } catch (err) {
+    console.error('Get note metadata error:', err.message);
     res.status(500).json({ error: err.message });
   }
 };
