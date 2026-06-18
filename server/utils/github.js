@@ -102,7 +102,7 @@ class GitHubService {
   }
 
   /**
-   * Upload encrypted file to a user's repo
+   * Upload file to a user's repo
    */
   static async uploadFile(userId, path, contentBase64, message = 'Upload note') {
     const repoName = await GitHubService.getOrCreateRepo(userId);
@@ -123,16 +123,33 @@ class GitHubService {
   }
 
   /**
-   * Get file content from a specific repo
-   * GitHub returns base64 with newlines - we strip them for clean decoding
+   * Get file bytes from a specific repo.
+   * GitHub's contents API can omit base64 content for larger files, so fall
+   * back to the provided download_url when needed.
    */
-  static async getFile(repoName, path) {
+  static async getFileBuffer(repoName, path) {
     const response = await axios.get(
       `${BASE_URL}/repos/${CENTRAL_USERNAME}/${repoName}/contents/${path}`,
       { headers: HEADERS }
     );
-    // Strip all whitespace from base64 - GitHub sometimes adds newlines
-    return response.data.content.replace(/\s/g, '');
+
+    if (response.data.content && response.data.encoding === 'base64') {
+      return Buffer.from(response.data.content.replace(/\s/g, ''), 'base64');
+    }
+
+    if (response.data.download_url) {
+      const rawResponse = await axios.get(response.data.download_url, {
+        headers: { Authorization: `token ${CENTRAL_TOKEN}`, 'User-Agent': 'Notes-Hub' },
+        responseType: 'arraybuffer'
+      });
+      return Buffer.from(rawResponse.data);
+    }
+
+    throw new Error('GitHub did not return readable file content');
+  }
+
+  static async getFile(repoName, path) {
+    return (await GitHubService.getFileBuffer(repoName, path)).toString('base64');
   }
 
   /**

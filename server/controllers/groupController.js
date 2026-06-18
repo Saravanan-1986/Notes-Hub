@@ -75,6 +75,10 @@ function getMimeType(filename) {
   return mimeTypes[ext] || 'application/octet-stream';
 }
 
+function safePathSegment(value) {
+  return value.replace(/[\\/:*?"<>|#%{}^~[\]`]/g, '_').trim() || 'file';
+}
+
 // ============================================================
 // CREATE GROUP
 // ============================================================
@@ -642,8 +646,9 @@ exports.uploadGroupNote = async (req, res) => {
     const ext = path.extname(originalName).toLowerCase();
     
     // Determine file type category for display
-    let fileType = 'pdf'; // default
-    if (['.docx', '.doc'].includes(ext)) fileType = 'docx';
+    let fileType = 'file';
+    if (ext === '.pdf') fileType = 'pdf';
+    else if (['.docx', '.doc'].includes(ext)) fileType = 'docx';
     else if (['.txt', '.md', '.csv'].includes(ext)) fileType = 'text';
     else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'].includes(ext)) fileType = 'image';
     else if (['.mp4', '.avi', '.mkv', '.mov'].includes(ext)) fileType = 'video';
@@ -655,12 +660,13 @@ exports.uploadGroupNote = async (req, res) => {
 
     // Store file directly without encryption
     const contentBase64 = req.file.buffer.toString('base64');
-    const githubPath = `groups/${group.code}/${folder.name}/${originalName}`;
+    const githubPath = `groups/${group.code}/${safePathSegment(folder.name)}/${Date.now()}-${safePathSegment(originalName)}`;
 
     console.log(`📁 Uploading ${originalName} (${(req.file.size / 1024).toFixed(1)} KB) - No encryption applied`);
 
     // Upload to GitHub using group's repo
     const repoName = group.repoName || `notes-hub-group-${group.code}`;
+    let savedRepoName = repoName;
     let result;
     try {
       result = await GitHubService.uploadFileToRepo(repoName, githubPath, contentBase64);
@@ -670,6 +676,7 @@ exports.uploadGroupNote = async (req, res) => {
         const newRepoName = await GitHubService.getOrCreateRepo(`group-${group.code}`);
         group.repoName = newRepoName;
         await group.save();
+        savedRepoName = newRepoName;
         result = await GitHubService.uploadFileToRepo(newRepoName, githubPath, contentBase64);
       } else {
         throw ghErr;
@@ -688,7 +695,7 @@ exports.uploadGroupNote = async (req, res) => {
       groupId: id,
       uploadedBy: req.user.id,
       githubPath,
-      repoName: group.repoName,
+      repoName: savedRepoName,
       fileSize: req.file.size,
       isEncrypted: false
     });
@@ -764,18 +771,16 @@ exports.viewGroupNote = async (req, res) => {
       return res.status(404).json({ error: 'Note not found' });
     }
 
-    // Fetch from GitHub
-    const fileContent = await GitHubService.getFile(note.repoName, note.githubPath);
-    
-    // Just decode base64 (no decryption needed)
-    const fileBuffer = Buffer.from(fileContent, 'base64');
+    // Fetch raw bytes from GitHub. No decryption or conversion is applied.
+    const fileBuffer = await GitHubService.getFileBuffer(note.repoName, note.githubPath);
 
     // Determine MIME type
     const contentType = note.mimeType || getMimeType(note.filename);
 
     res.set({
       'Content-Type': contentType,
-      'Content-Disposition': `inline; filename="${note.filename}"`,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(note.filename)}`,
+      'X-Content-Type-Options': 'nosniff',
       'Content-Length': fileBuffer.length
     });
     res.send(fileBuffer);

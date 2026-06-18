@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 export default function PDFViewer({ pdfUrl, filename }) {
   const canvasRef = useRef(null);
@@ -24,10 +25,18 @@ export default function PDFViewer({ pdfUrl, filename }) {
       try {
         const pdfjsLib = await import('pdfjs-dist');
 
-        // Set worker path - use CDN for reliability
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-        const loadingTask = pdfjsLib.getDocument(pdfUrl);
+        const response = await fetch(pdfUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const arrayBuffer = await response.arrayBuffer();
+        const header = new TextDecoder('latin1').decode(arrayBuffer.slice(0, 5));
+        if (header !== '%PDF-') {
+          throw new Error(`Invalid PDF header: ${header || 'empty file'}`);
+        }
+
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const loadedPdf = await loadingTask.promise;
 
         if (cancelled) return;

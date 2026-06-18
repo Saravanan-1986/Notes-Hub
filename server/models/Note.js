@@ -7,6 +7,8 @@ const noteSchema = new mongoose.Schema({
   visibility: { type: String, enum: ['public', 'private'], default: 'private' },
   githubPath: { type: String, required: true },
   repoName: { type: String, required: true },
+  mimeType: { type: String },
+  fileType: { type: String, default: 'file' },
   fileSize: { type: Number },
   uploadedAt: { type: Date, default: Date.now }
 });

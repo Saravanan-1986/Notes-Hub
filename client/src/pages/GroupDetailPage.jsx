@@ -487,7 +487,7 @@ export default function GroupDetailPage() {
                                 <span className="note-item-badge word-badge">DOCX</span>
                               )}
                               {note.isEncrypted === false && (
-                                <span className="note-item-badge image-badge">🖼 PDF</span>
+                                <span className="note-item-badge image-badge">Direct</span>
                               )}
                             </div>
                           </div>

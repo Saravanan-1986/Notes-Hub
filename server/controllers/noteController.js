@@ -45,6 +45,25 @@ function getMimeType(filename) {
   return mimeTypes[ext] || 'application/octet-stream';
 }
 
+function getFileType(filename, mimeType = '') {
+  const ext = path.extname(filename).toLowerCase();
+  if (mimeType.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.ico'].includes(ext)) return 'image';
+  if (mimeType.startsWith('video/') || ['.mp4', '.webm', '.ogg', '.avi', '.mov', '.mkv', '.wmv'].includes(ext)) return 'video';
+  if (mimeType.startsWith('audio/') || ['.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma'].includes(ext)) return 'audio';
+  if (ext === '.pdf') return 'pdf';
+  if (['.docx', '.doc'].includes(ext)) return 'docx';
+  if (['.xlsx', '.xls', '.csv'].includes(ext)) return 'spreadsheet';
+  if (['.pptx', '.ppt'].includes(ext)) return 'presentation';
+  if (['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2'].includes(ext)) return 'archive';
+  if (mimeType.startsWith('text/') || ['.txt', '.md', '.log', '.ini', '.cfg'].includes(ext)) return 'text';
+  if (['.js', '.jsx', '.ts', '.tsx', '.py', '.rb', '.java', '.c', '.cpp', '.h', '.cs', '.go', '.rs', '.swift', '.kt', '.php', '.html', '.css', '.scss', '.less', '.json', '.xml', '.yaml', '.yml', '.toml', '.sh', '.bash', '.sql'].includes(ext)) return 'code';
+  return 'file';
+}
+
+function safePathSegment(value) {
+  return value.replace(/[\\/:*?"<>|#%{}^~[\]`]/g, '_').trim() || 'file';
+}
+
 // Upload file (any type)
 exports.uploadNote = async (req, res) => {
   try {
@@ -64,12 +83,14 @@ exports.uploadNote = async (req, res) => {
     }
 
     const originalName = req.file.originalname;
+    const mimeType = req.file.mimetype || getMimeType(originalName);
+    const fileType = getFileType(originalName, mimeType);
     
     // Store file directly without encryption - base64 encode it
     const contentBase64 = req.file.buffer.toString('base64');
 
     // GitHub path: folderName/filename
-    const githubPath = `${folder.name}/${originalName}`;
+    const githubPath = `${safePathSegment(folder.name)}/${Date.now()}-${safePathSegment(originalName)}`;
 
     // Upload to GitHub using central credentials - auto-creates repo with overflow
     const result = await GitHubService.uploadFile(req.user.id, githubPath, contentBase64);
@@ -82,6 +103,8 @@ exports.uploadNote = async (req, res) => {
       visibility: visibility || 'private',
       githubPath,
       repoName: result.repoName,
+      mimeType,
+      fileType,
       fileSize: req.file.size
     });
 
@@ -96,6 +119,8 @@ exports.uploadNote = async (req, res) => {
         folderId: folder._id,
         visibility: note.visibility,
         fileSize: note.fileSize,
+        mimeType: note.mimeType,
+        fileType: note.fileType,
         uploadedAt: note.uploadedAt
       }
     });
@@ -151,18 +176,16 @@ exports.viewNote = async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to view this note' });
     }
 
-    // Fetch from GitHub using the stored repo name
-    const fileContent = await GitHubService.getFile(note.repoName, note.githubPath);
-    
-    // Just decode base64 (no decryption needed)
-    const fileBuffer = Buffer.from(fileContent, 'base64');
+    // Fetch raw bytes from GitHub. No decryption or conversion is applied.
+    const fileBuffer = await GitHubService.getFileBuffer(note.repoName, note.githubPath);
 
     // Determine MIME type from filename
-    const contentType = getMimeType(note.filename);
+    const contentType = note.mimeType || getMimeType(note.filename);
 
     res.set({
       'Content-Type': contentType,
-      'Content-Disposition': `inline; filename="${note.filename}"`,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(note.filename)}`,
+      'X-Content-Type-Options': 'nosniff',
       'Content-Length': fileBuffer.length
     });
     res.send(fileBuffer);
@@ -285,6 +308,8 @@ exports.getNoteMetadata = async (req, res) => {
         owner: note.owner,
         visibility: note.visibility,
         fileSize: note.fileSize,
+        mimeType: note.mimeType,
+        fileType: note.fileType,
         uploadedAt: note.uploadedAt
       }
     });

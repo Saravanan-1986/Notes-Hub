@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import PDFViewer from './PDFViewer';
 import WordViewer from './WordViewer';
 
@@ -20,7 +20,8 @@ export default function UniversalFileViewer({ fileUrl, filename, fileType, mimeT
   const isVideo = mime.startsWith('video/') || ['mp4', 'webm', 'ogg', 'avi', 'mov', 'mkv', 'wmv'].includes(ext);
   const isAudio = mime.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac', 'aac', 'wma'].includes(ext);
   const isPdf = mime === 'application/pdf' || ext === 'pdf';
-  const isDocx = mime.includes('wordprocessingml') || mime.includes('msword') || ext === 'docx' || ext === 'doc';
+  const isDocx = mime.includes('wordprocessingml') || ext === 'docx';
+  const isLegacyWord = mime.includes('msword') || ext === 'doc';
   const isSpreadsheet = mime.includes('spreadsheet') || mime.includes('ms-excel') || ['xlsx', 'xls', 'csv'].includes(ext);
   const isPresentation = mime.includes('presentation') || mime.includes('ms-powerpoint') || ['pptx', 'ppt'].includes(ext);
   const isText = mime.startsWith('text/') || ['txt', 'md', 'csv', 'log', 'ini', 'cfg'].includes(ext);
@@ -182,12 +183,12 @@ export default function UniversalFileViewer({ fileUrl, filename, fileType, mimeT
       )}
 
       {/* Spreadsheet / Presentation / Archive / Epub - show download prompt */}
-      {(isSpreadsheet || isPresentation || isArchive || isEpub) && !isText && !isCode && (
+      {(isLegacyWord || isSpreadsheet || isPresentation || isArchive || isEpub) && !isText && !isCode && (
         <div className="download-viewer-container">
           <div className="download-viewer-icon">{badge.icon}</div>
           <h3 className="download-viewer-title">{filename}</h3>
           <p className="download-viewer-text">
-            This file type ({badge.label}) cannot be previewed in the browser.
+            This file type ({badge.label}) cannot be previewed reliably in the browser.
           </p>
           <div className="download-viewer-actions">
             <button className="btn btn-primary btn-glow" onClick={handleDownload}>
@@ -198,7 +199,7 @@ export default function UniversalFileViewer({ fileUrl, filename, fileType, mimeT
       )}
 
       {/* Fallback for unknown types */}
-      {!isImage && !isVideo && !isAudio && !isPdf && !isDocx && !isText && !isCode && !isSpreadsheet && !isPresentation && !isArchive && !isEpub && (
+      {!isImage && !isVideo && !isAudio && !isPdf && !isDocx && !isLegacyWord && !isText && !isCode && !isSpreadsheet && !isPresentation && !isArchive && !isEpub && (
         <div className="download-viewer-container">
           <div className="download-viewer-icon">📄</div>
           <h3 className="download-viewer-title">{filename}</h3>

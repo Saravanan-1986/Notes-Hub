@@ -2,20 +2,22 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import PDFViewer from '../components/PDFViewer';
+import UniversalFileViewer from '../components/UniversalFileViewer';
 
 export default function NoteViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [note, setNote] = useState(null);
-  const [pdfUrl, setPdfUrl] = useState(null);
+  const [fileUrl, setFileUrl] = useState(null);
+  const [mimeType, setMimeType] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let createdUrl = null;
 
     const fetchNote = async () => {
       try {
@@ -28,12 +30,14 @@ export default function NoteViewer() {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
-        if (!response.ok) throw new Error('Failed to fetch PDF');
+        if (!response.ok) throw new Error('Failed to fetch file');
 
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
+        createdUrl = url;
         if (cancelled) return;
-        setPdfUrl(url);
+        setMimeType(blob.type || response.headers.get('content-type') || data.note.mimeType || '');
+        setFileUrl(url);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load document');
       } finally {
@@ -45,7 +49,7 @@ export default function NoteViewer() {
 
     return () => {
       cancelled = true;
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
   }, [id]);
 
@@ -61,7 +65,7 @@ export default function NoteViewer() {
     }
   };
 
-  if (loading) return <div className="loading">Decrypting and loading document...</div>;
+  if (loading) return <div className="loading">Loading file...</div>;
   if (error) return <div className="loading error">Error: {error}</div>;
   if (!note) return <div className="loading">Note not found</div>;
 
@@ -102,10 +106,15 @@ export default function NoteViewer() {
       </div>
 
       <div className="pdf-viewer">
-        {pdfUrl ? (
-          <PDFViewer pdfUrl={pdfUrl} filename={note.filename} />
+        {fileUrl ? (
+          <UniversalFileViewer
+            fileUrl={fileUrl}
+            filename={note.filename}
+            fileType={note.fileType}
+            mimeType={mimeType}
+          />
         ) : (
-          <div className="loading">Preparing document...</div>
+          <div className="loading">Preparing file...</div>
         )}
       </div>
     </div>

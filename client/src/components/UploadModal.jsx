@@ -10,7 +10,7 @@ export default function UploadModal({ folderId, onClose, onUpload }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
-      setError('Please select a PDF file');
+      setError('Please select a file');
       return;
     }
 
@@ -37,21 +37,20 @@ export default function UploadModal({ folderId, onClose, onUpload }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>Upload PDF Note</h2>
+        <h2>Upload File</h2>
         <form onSubmit={handleSubmit}>
           {error && <div className="alert alert-error">{error}</div>}
           <div className="form-group">
-            <label>Select PDF File</label>
+            <label>Select File</label>
             <div className="file-drop-zone">
               <input
                 type="file"
-                accept=".pdf,application/pdf"
                 onChange={(e) => setFile(e.target.files[0])}
                 required
               />
               <span className="drop-icon">📄</span>
               <p className="drop-text">
-                {file ? file.name : <><strong>Click to browse</strong> or drag PDF here</>}
+                {file ? file.name : <><strong>Click to browse</strong> or drag any file here</>}
               </p>
             </div>
             {file && (
@@ -75,9 +74,9 @@ export default function UploadModal({ folderId, onClose, onUpload }) {
             </button>
             <button type="submit" className="btn btn-primary" disabled={uploading || !file}>
               {uploading ? (
-                <>Encrypting & Uploading...</>
+                <>Uploading...</>
               ) : (
-                <>⬆ Upload & Encrypt</>
+                <>Upload</>
               )}
             </button>
           </div>
