@@ -4,6 +4,8 @@ import API from '../api/axios';
 import UniversalFileViewer from '../components/UniversalFileViewer';
 import BackButton from '../components/BackButton';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function GroupDetailPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
@@ -129,7 +131,7 @@ export default function GroupDetailPage() {
     setError('');
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/groups/${groupId}/notes/${note._id}/view`, {
+      const response = await fetch(`${API_BASE_URL}/groups/${groupId}/notes/${note._id}/view`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) {

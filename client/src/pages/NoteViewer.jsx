@@ -4,6 +4,8 @@ import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import UniversalFileViewer from '../components/UniversalFileViewer';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export default function NoteViewer() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -26,7 +28,7 @@ export default function NoteViewer() {
         setNote(data.note);
 
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:5000/api/notes/${id}/view`, {
+        const response = await fetch(`${API_BASE_URL}/notes/${id}/view`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
